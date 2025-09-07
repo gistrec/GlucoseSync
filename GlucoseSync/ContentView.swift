@@ -49,8 +49,8 @@ struct ContentView: View {
                         .background(Color(UIColor.secondarySystemBackground))
                         .cornerRadius(8)
                         .disabled(isSyncing)
-                        .onChange(of: email) { newValue in
-                            KeychainService.shared.set(newValue, for: "userEmail")
+                        .onChange(of: email) {
+                            KeychainService.shared.set(email, for: "userEmail")
                         }
 
                     SecureField("Password", text: $password)
@@ -59,8 +59,8 @@ struct ContentView: View {
                         .background(Color(UIColor.secondarySystemBackground))
                         .cornerRadius(8)
                         .disabled(isSyncing)
-                        .onChange(of: password) { newValue in
-                            KeychainService.shared.set(newValue, for: "userPassword")
+                        .onChange(of: password) {
+                            KeychainService.shared.set(password, for: "userPassword")
                         }
 
                     Button("Request HealthKit Access") {
