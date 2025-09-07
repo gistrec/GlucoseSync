@@ -41,27 +41,35 @@ struct ContentView: View {
                             .foregroundColor(.gray)
                     }
 
-                    TextField("Email (LibreLinkUp)", text: $email)
-                        .textContentType(.emailAddress)
-                        .autocapitalization(.none)
-                        .keyboardType(.emailAddress)
-                        .padding()
-                        .background(Color(UIColor.secondarySystemBackground))
-                        .cornerRadius(8)
-                        .disabled(isSyncing)
-                        .onChange(of: email) {
-                            KeychainService.shared.set(email, for: "userEmail")
-                        }
+                    HStack {
+                        Image(systemName: "envelope")
+                            .foregroundColor(.gray)
+                        TextField("Email (LibreLinkUp)", text: $email)
+                            .textContentType(.emailAddress)
+                            .autocapitalization(.none)
+                            .keyboardType(.emailAddress)
+                    }
+                    .padding()
+                    .background(Color(UIColor.secondarySystemBackground))
+                    .cornerRadius(8)
+                    .disabled(isSyncing)
+                    .onChange(of: email) {
+                        KeychainService.shared.set(email, for: "userEmail")
+                    }
 
-                    SecureField("Password", text: $password)
-                        .textContentType(.password)
-                        .padding()
-                        .background(Color(UIColor.secondarySystemBackground))
-                        .cornerRadius(8)
-                        .disabled(isSyncing)
-                        .onChange(of: password) {
-                            KeychainService.shared.set(password, for: "userPassword")
-                        }
+                    HStack {
+                        Image(systemName: "lock")
+                            .foregroundColor(.gray)
+                        SecureField("Password", text: $password)
+                            .textContentType(.password)
+                    }
+                    .padding()
+                    .background(Color(UIColor.secondarySystemBackground))
+                    .cornerRadius(8)
+                    .disabled(isSyncing)
+                    .onChange(of: password) {
+                        KeychainService.shared.set(password, for: "userPassword")
+                    }
 
                     Button("Request HealthKit Access") {
                         HealthKitViewModel.shared.requestAuthorization(
