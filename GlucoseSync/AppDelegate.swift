@@ -24,7 +24,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func scheduleGlucoseSync() {
-        let request = BGAppRefreshTaskRequest(identifier: "com.gistrec.glucosesync.refresh")
+        let identifier = "com.gistrec.glucosesync.refresh"
+
+        // Cancel any previously scheduled requests to avoid duplicates
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier)
+        print("🔁 Cancelled existing task requests")
+
+        let request = BGAppRefreshTaskRequest(identifier: identifier)
         request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60) // каждый час
 
         do {
