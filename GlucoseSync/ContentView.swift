@@ -136,7 +136,12 @@ class HealthKitViewModel: ObservableObject {
     ) {
         guard HKHealthStore.isHealthDataAvailable(),
               let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)
-        else { return }
+        else {
+            DispatchQueue.main.async {
+                onError("Health data not available")
+            }
+            return
+        }
 
         healthStore.requestAuthorization(toShare: [glucoseType], read: []) { success, error in
             DispatchQueue.main.async {
