@@ -34,6 +34,12 @@ struct ContentView: View {
                     Text("Glucose Sync")
                         .font(.largeTitle)
 
+                    Text("Sync your Libre3 glucose readings with Apple Health")
+                        .font(.subheadline)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.gray)
+                        .padding(.horizontal)
+
                     if lastSyncDate > 0 {
                         let date = Date(timeIntervalSince1970: lastSyncDate)
                         Text("Last sync: \(formatted(date))")
@@ -47,7 +53,7 @@ struct ContentView: View {
                             .scaledToFit()
                             .frame(width: 20, height: 20)
                             .foregroundColor(.gray)
-                        TextField("Email (LibreLinkUp)", text: $email)
+                        TextField("Email", text: $email)
                             .textContentType(.emailAddress)
                             .autocapitalization(.none)
                             .keyboardType(.emailAddress)
@@ -88,7 +94,8 @@ struct ContentView: View {
                             }
                         )
                     }
-                    .buttonStyle(.borderedProminent)
+                    .cornerRadius(8)
+                    .buttonStyle(.bordered)
                     .disabled(isSyncing)
 
                     Button("Sync Glucose from Server") {
@@ -107,7 +114,8 @@ struct ContentView: View {
                             }
                         )
                     }
-                    .buttonStyle(.bordered)
+                    .cornerRadius(8)
+                    .buttonStyle(.borderedProminent)
                     .disabled(isSyncing)
                 }
                 .padding()
