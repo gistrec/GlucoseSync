@@ -43,6 +43,9 @@ struct ContentView: View {
 
                     HStack {
                         Image(systemName: "envelope")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 20, height: 20)
                             .foregroundColor(.gray)
                         TextField("Email (LibreLinkUp)", text: $email)
                             .textContentType(.emailAddress)
@@ -59,6 +62,9 @@ struct ContentView: View {
 
                     HStack {
                         Image(systemName: "lock")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 20, height: 20)
                             .foregroundColor(.gray)
                         SecureField("Password", text: $password)
                             .textContentType(.password)
