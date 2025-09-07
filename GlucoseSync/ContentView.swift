@@ -58,7 +58,7 @@ struct ContentView: View {
                         .disabled(isSyncing)
 
                     Button("Request HealthKit Access") {
-                        viewModel.requestAuthorization(
+                        HealthKitViewModel.shared.requestAuthorization(
                             onSuccess: {
                                 showAuthAlert = true
                             },
@@ -137,9 +137,7 @@ class HealthKitViewModel: ObservableObject {
         guard HKHealthStore.isHealthDataAvailable(),
               let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)
         else {
-            DispatchQueue.main.async {
-                onError("Health data not available")
-            }
+            onError("Health data not available")
             return
         }
 
@@ -148,9 +146,11 @@ class HealthKitViewModel: ObservableObject {
                 if success {
                     print("✅ Access granted")
                     onSuccess()
+                    return
                 } else {
                     print("❌ Error: \(error?.localizedDescription ?? "unknown")")
                     onError("No access to Health API")
+                    return
                 }
             }
         }
