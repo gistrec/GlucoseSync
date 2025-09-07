@@ -20,12 +20,14 @@ final class SyncCoordinator {
             return
         }
 
-        LibreLinkUpAPI.shared.login(email: email, password: password) { result in
-            switch result {
-            case .success(let (token, accountId)):
-                LibreLinkUpAPI.shared.fetchGlucose(token: token, accountId: accountId) { result in
-                    switch result {
-                    case .success(let readings):
+        LibreLinkUpAPI.shared.login(
+            email: email,
+            password: password,
+            onSuccess: { token, accountId in
+                LibreLinkUpAPI.shared.fetchGlucose(
+                    token: token,
+                    accountId: accountId,
+                    onSuccess: { readings in
                         let group = DispatchGroup()
                         for reading in readings {
                             group.enter()
@@ -37,19 +39,17 @@ final class SyncCoordinator {
                             UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastSyncDate")
                             onSuccess()
                         }
-                    case .failure(let error):
-                        print("❌ Fetch error: \(error.localizedDescription)")
-                        onError("An error occurred during authorization")
-                        onSuccess()
+                    },
+                    onError: { errorMessage in
+                        onError(errorMessage)
                     }
-                }
-
-            case .failure(let error):
-                onError("")
-                print("❌ Login error: \(error.localizedDescription)")
-                onSuccess()
+                )
+            },
+            onError: { errorMessage in
+                onError(errorMessage)
+                return
             }
-        }
+        )
     }
 
     private func saveGlucoseSample(

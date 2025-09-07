@@ -60,26 +60,34 @@ struct ContentView: View {
                         .disabled(isSyncing)
 
                     Button("Request HealthKit Access") {
-                        viewModel.requestAuthorization {
-                            showAuthAlert = true
-                        } onError: { error in
-                            errorMessage = error
-                            showErrorAlert = true
-                        }
+                        viewModel.requestAuthorization(
+                            onSuccess: {
+                                showAuthAlert = true
+                            },
+                            onError: { error in
+                                errorMessage = error
+                                showErrorAlert = true
+                            }
+                        )
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(isSyncing)
 
                     Button("Sync Glucose from Server") {
                         isSyncing = true
-                        SyncCoordinator.shared.syncGlucoseFromServer(email: email, password: password) {
-                            isSyncing = false
-                            showSyncAlert = true
-                        } onError: { error in
-                            isSyncing = false
-                            errorMessage = error
-                            showErrorAlert = true
-                        }
+                        SyncCoordinator.shared.syncGlucoseFromServer(
+                            email: email,
+                            password: password,
+                            onSuccess: {
+                                isSyncing = false
+                                showSyncAlert = true
+                            },
+                            onError: { error in
+                                isSyncing = false
+                                errorMessage = error
+                                showErrorAlert = true
+                            }
+                        )
                     }
                     .buttonStyle(.bordered)
                     .disabled(isSyncing)
@@ -88,7 +96,6 @@ struct ContentView: View {
 
                 Spacer()
 
-                // 👇 подпись внизу
                 Text("Made by @gistrec")
                     .font(.footnote)
                     .foregroundColor(.gray)

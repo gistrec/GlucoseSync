@@ -42,10 +42,12 @@ final class LibreLinkUpAPI {
     func login(
         email: String,
         password: String,
-        onSuccess: @escaping (Result<(token: String, accountId: String), Error>
-    ) -> Void) {
+        onSuccess: @escaping (_ token: String, _ accountId: String) -> Void,
+        onError: @escaping (String) -> Void
+    ) {
         guard let url = URL(string: "\(baseURL)/llu/auth/login") else {
-            return onSuccess(.failure(URLError(.badURL)))
+            onError("Invalid login URL")
+            return
         }
 
         var request = URLRequest(url: url)
@@ -60,32 +62,52 @@ final class LibreLinkUpAPI {
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         } catch {
-            return onSuccess(.failure(error))
+            onError("Failed to encode request body: \(error.localizedDescription)")
+            return
         }
 
         URLSession.shared.dataTask(with: request) { data, response, error in
             if let error = error {
-                return onSuccess(.failure(error))
+                onError("Network request failed: \(error.localizedDescription)")
+                return
             }
 
             guard let data = data else {
-                return onSuccess(.failure(URLError(.badServerResponse)))
+                onError("No data received from server")
+                return
             }
 
             do {
-                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let dataDict = json["data"] as? [String: Any],
+                guard let top = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    onError("Invalid JSON structure")
+                    return
+                }
+
+                // Явная ошибка от сервера:
+                if let err = top["error"] as? [String: Any],
+                   let message = err["message"] as? String
+                {
+                    onError("Login error: \(message)")
+                    return
+                }
+
+                // Успешный ответ:
+                if let dataDict = top["data"] as? [String: Any],
                    let authTicket = dataDict["authTicket"] as? [String: Any],
                    let token = authTicket["token"] as? String,
                    let user = dataDict["user"] as? [String: Any],
-                   let accountId = user["id"] as? String {
-                    onSuccess(.success((token, accountId)))
-                } else {
-                    let msg = (try? JSONSerialization.jsonObject(with: data)) ?? "unknown"
-                    throw NSError(domain: "LoginError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid response: \(msg)"])
+                   let accountId = user["id"] as? String
+                {
+                    onSuccess(token, accountId)
+                    return
                 }
+
+                // Непредвиденная форма ответа — вернём тело как текст для дебага
+                let fallback = String(data: data, encoding: .utf8) ?? "unknown"
+                onError("Invalid response: \(fallback)")
             } catch {
-                onSuccess(.failure(error))
+                onError("Failed to parse response: \(error.localizedDescription)")
+                return
             }
         }.resume()
     }
@@ -93,10 +115,12 @@ final class LibreLinkUpAPI {
     func fetchGlucose(
         token: String,
         accountId: String,
-        onSuccess: @escaping (Result<[GlucoseReading], Error>
-    ) -> Void) {
+        onSuccess: @escaping ([GlucoseReading]) -> Void,
+        onError: @escaping (String) -> Void
+    ) {
         guard let url = URL(string: "\(baseURL)//llu/connections/\(accountId)/graph") else {
-            return onSuccess(.failure(URLError(.badURL)))
+            onError("Invalid login URL")
+            return
         }
 
         var request = URLRequest(url: url)
@@ -108,41 +132,48 @@ final class LibreLinkUpAPI {
 
         URLSession.shared.dataTask(with: request) { data, response, error in
             if let error = error {
-                return onSuccess(.failure(error))
+                onError("Network request failed: \(error.localizedDescription)")
+                return
             }
 
             guard let data = data else {
-                return onSuccess(.failure(URLError(.badServerResponse)))
+                onError("No data received from server")
+                return
             }
 
-            if let jsonString = String(data: data, encoding: .utf8) {
-                print("📦 Full JSON response:\n\(jsonString)")
-            } else {
-                print("❌ Failed to decode JSON data as UTF-8 string")
-            }
             do {
-                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let dataDict = json["data"] as? [String: Any],
-                   let graphData = dataDict["graphData"] as? [[String: Any]] {
-                    print(graphData)
-
-                    let readings: [GlucoseReading] = graphData.compactMap { dict -> GlucoseReading? in
-                        print(dict)
-                        guard let value = dict["ValueInMgPerDl"] as? Double,
-                              let timestampStr = dict["Timestamp"] as? String,
-                              let date = self.parseLibreDate(timestampStr) else {
-                            return nil
-                        }
-
-                        return GlucoseReading(id: timestampStr, value: value, timestamp: date)
-                    }
-
-                    onSuccess(.success(readings))
-                } else {
-                    throw NSError(domain: "GraphDataError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to parse glucose data"])
+                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    onError("Invalid JSON structure")
+                    return
                 }
+                   
+                // Проверяем на ошибку от Libre Cloud
+                if let err = json["error"] as? [String: Any],
+                   let message = err["message"] as? String
+                {
+                    onError("Libre Cloud error: \(message)")
+                    return
+                }
+
+                guard let dataDict = json["data"] as? [String: Any],
+                      let graphData = dataDict["graphData"] as? [[String: Any]] else {
+                    onError("Failed to parse glucose data")
+                    return
+                }
+
+                let readings: [GlucoseReading] = graphData.compactMap { dict -> GlucoseReading? in
+                    guard let value = dict["ValueInMgPerDl"] as? Double,
+                          let timestampStr = dict["Timestamp"] as? String,
+                          let date = self.parseLibreDate(timestampStr) else {
+                        return nil
+                    }
+                    return GlucoseReading(id: timestampStr, value: value, timestamp: date)
+                }
+
+                onSuccess(readings)
             } catch {
-                onSuccess(.failure(error))
+                onError("Failed to parse response: \(error.localizedDescription)")
+                return
             }
 
         }.resume()

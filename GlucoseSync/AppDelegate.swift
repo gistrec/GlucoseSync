@@ -56,12 +56,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         }
 
         // Запускаем синк (без блокировок)
-        SyncCoordinator.shared.syncGlucoseFromServer(email: email, password: password) {
-            print("✅ BG sync completed")
-            task.setTaskCompleted(success: true)
-        } onError: { error in
-            print("❌ BG sync failed: \(error)")
-            task.setTaskCompleted(success: false)
-        }
+        SyncCoordinator.shared.syncGlucoseFromServer(
+            email: email,
+            password: password,
+            onSuccess: {
+                print("✅ BG sync completed")
+                task.setTaskCompleted(success: true)
+            },
+            onError: { error in
+                print("❌ BG sync failed: \(error)")
+                task.setTaskCompleted(success: false)
+            }
+        )
     }
 }
