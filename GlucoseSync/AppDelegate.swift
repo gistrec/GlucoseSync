@@ -46,8 +46,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         }
 
         // Достаём креды (без UI)
-        let email = UserDefaults.standard.string(forKey: "userEmail") ?? ""
-        let password = UserDefaults.standard.string(forKey: "userPassword") ?? ""
+        let email = KeychainService.shared.get("userEmail") ?? ""
+        let password = KeychainService.shared.get("userPassword") ?? ""
 
         guard !email.isEmpty, !password.isEmpty else {
             print("❌ Missing credentials")

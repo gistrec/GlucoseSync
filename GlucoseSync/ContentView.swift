@@ -4,8 +4,8 @@ import BackgroundTasks
 
 
 struct ContentView: View {
-    @AppStorage("userEmail") private var email = ""
-    @AppStorage("userPassword") private var password = ""
+    @State private var email: String = ""
+    @State private var password: String = ""
 
     @AppStorage("lastSyncDate") private var lastSyncDate: Double = 0  // Unix timestamp
 
@@ -49,6 +49,9 @@ struct ContentView: View {
                         .background(Color(UIColor.secondarySystemBackground))
                         .cornerRadius(8)
                         .disabled(isSyncing)
+                        .onChange(of: email) { newValue in
+                            KeychainService.shared.set(newValue, for: "userEmail")
+                        }
 
                     SecureField("Password", text: $password)
                         .textContentType(.password)
@@ -56,6 +59,9 @@ struct ContentView: View {
                         .background(Color(UIColor.secondarySystemBackground))
                         .cornerRadius(8)
                         .disabled(isSyncing)
+                        .onChange(of: password) { newValue in
+                            KeychainService.shared.set(newValue, for: "userPassword")
+                        }
 
                     Button("Request HealthKit Access") {
                         viewModel.requestAuthorization(
@@ -106,6 +112,10 @@ struct ContentView: View {
                     .padding(20)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
             }
+        }
+        .onAppear {
+            email = KeychainService.shared.get("userEmail") ?? ""
+            password = KeychainService.shared.get("userPassword") ?? ""
         }
         .alert("Done", isPresented: $showAuthAlert) {
             Button("OK", role: .cancel) { }
