@@ -12,7 +12,7 @@ final class SyncCoordinator {
     func syncGlucoseFromServer(
         email: String,
         password: String,
-        completion: @escaping () -> Void,
+        onSuccess: @escaping () -> Void,
         onError: @escaping (String) -> Void
     ) {
         guard !email.isEmpty, !password.isEmpty else {
@@ -35,22 +35,29 @@ final class SyncCoordinator {
                         }
                         group.notify(queue: .main) {
                             UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastSyncDate")
-                            completion()
+                            onSuccess()
                         }
                     case .failure(let error):
                         print("❌ Fetch error: \(error.localizedDescription)")
-                        completion()
+                        onError("An error occurred during authorization")
+                        onSuccess()
                     }
                 }
 
             case .failure(let error):
+                onError("")
                 print("❌ Login error: \(error.localizedDescription)")
-                completion()
+                onSuccess()
             }
         }
     }
 
-    private func saveGlucoseSample(value: Double, date: Date, externalId: String, completion: @escaping () -> Void) {
+    private func saveGlucoseSample(
+        value: Double,
+        date: Date,
+        externalId: String,
+        onSuccess: @escaping () -> Void
+    ) {
         guard let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose) else { return }
 
         let glucoseMolarMass = 180.15588 // г/моль
@@ -80,7 +87,7 @@ final class SyncCoordinator {
                 } else {
                     print("❌ Save failed: \(error?.localizedDescription ?? "unknown")")
                 }
-                completion()
+                onSuccess()
             }
         }
     }

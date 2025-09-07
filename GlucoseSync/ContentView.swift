@@ -17,6 +17,8 @@ struct ContentView: View {
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
 
+    @State private var isSyncing = false
+
     private func formatted(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale.current
@@ -48,12 +50,14 @@ struct ContentView: View {
                         .padding()
                         .background(Color(UIColor.secondarySystemBackground))
                         .cornerRadius(8)
+                        .disabled(isSyncing)
 
                     SecureField("Password", text: $password)
                         .textContentType(.password)
                         .padding()
                         .background(Color(UIColor.secondarySystemBackground))
                         .cornerRadius(8)
+                        .disabled(isSyncing)
 
                     Button("Request HealthKit Access") {
                         viewModel.requestAuthorization {
@@ -63,15 +67,22 @@ struct ContentView: View {
                             showErrorAlert = true
                         }
                     }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isSyncing)
 
                     Button("Sync Glucose from Server") {
+                        isSyncing = true
                         SyncCoordinator.shared.syncGlucoseFromServer(email: email, password: password) {
+                            isSyncing = false
                             showSyncAlert = true
                         } onError: { error in
+                            isSyncing = false
                             errorMessage = error
                             showErrorAlert = true
                         }
                     }
+                    .buttonStyle(.bordered)
+                    .disabled(isSyncing)
                 }
                 .padding()
 
@@ -82,6 +93,13 @@ struct ContentView: View {
                     .font(.footnote)
                     .foregroundColor(.gray)
                     .padding(.bottom, 12)
+            }
+
+            if isSyncing {
+                Color.black.opacity(0.15).ignoresSafeArea()
+                ProgressView("Syncing…")
+                    .padding(20)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
             }
         }
         .alert("Done", isPresented: $showAuthAlert) {
@@ -108,7 +126,7 @@ class HealthKitViewModel: ObservableObject {
     private let healthStore = HKHealthStore()
 
     func requestAuthorization(
-        completion: @escaping () -> Void,
+        onSuccess: @escaping () -> Void,
         onError: @escaping (String) -> Void
     ) {
         guard HKHealthStore.isHealthDataAvailable(),
@@ -119,7 +137,7 @@ class HealthKitViewModel: ObservableObject {
             DispatchQueue.main.async {
                 if success {
                     print("✅ Access granted")
-                    completion()
+                    onSuccess()
                 } else {
                     print("❌ Error: \(error?.localizedDescription ?? "unknown")")
                     onError("No access to Health API")

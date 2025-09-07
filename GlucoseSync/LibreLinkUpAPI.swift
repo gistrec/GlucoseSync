@@ -39,9 +39,13 @@ final class LibreLinkUpAPI {
         return formatter.date(from: string)
     }
 
-    func login(email: String, password: String, completion: @escaping (Result<(token: String, accountId: String), Error>) -> Void) {
+    func login(
+        email: String,
+        password: String,
+        onSuccess: @escaping (Result<(token: String, accountId: String), Error>
+    ) -> Void) {
         guard let url = URL(string: "\(baseURL)/llu/auth/login") else {
-            return completion(.failure(URLError(.badURL)))
+            return onSuccess(.failure(URLError(.badURL)))
         }
 
         var request = URLRequest(url: url)
@@ -56,16 +60,16 @@ final class LibreLinkUpAPI {
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         } catch {
-            return completion(.failure(error))
+            return onSuccess(.failure(error))
         }
 
         URLSession.shared.dataTask(with: request) { data, response, error in
             if let error = error {
-                return completion(.failure(error))
+                return onSuccess(.failure(error))
             }
 
             guard let data = data else {
-                return completion(.failure(URLError(.badServerResponse)))
+                return onSuccess(.failure(URLError(.badServerResponse)))
             }
 
             do {
@@ -75,20 +79,24 @@ final class LibreLinkUpAPI {
                    let token = authTicket["token"] as? String,
                    let user = dataDict["user"] as? [String: Any],
                    let accountId = user["id"] as? String {
-                    completion(.success((token, accountId)))
+                    onSuccess(.success((token, accountId)))
                 } else {
                     let msg = (try? JSONSerialization.jsonObject(with: data)) ?? "unknown"
                     throw NSError(domain: "LoginError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid response: \(msg)"])
                 }
             } catch {
-                completion(.failure(error))
+                onSuccess(.failure(error))
             }
         }.resume()
     }
 
-    func fetchGlucose(token: String, accountId: String, completion: @escaping (Result<[GlucoseReading], Error>) -> Void) {
+    func fetchGlucose(
+        token: String,
+        accountId: String,
+        onSuccess: @escaping (Result<[GlucoseReading], Error>
+    ) -> Void) {
         guard let url = URL(string: "\(baseURL)//llu/connections/\(accountId)/graph") else {
-            return completion(.failure(URLError(.badURL)))
+            return onSuccess(.failure(URLError(.badURL)))
         }
 
         var request = URLRequest(url: url)
@@ -100,11 +108,11 @@ final class LibreLinkUpAPI {
 
         URLSession.shared.dataTask(with: request) { data, response, error in
             if let error = error {
-                return completion(.failure(error))
+                return onSuccess(.failure(error))
             }
 
             guard let data = data else {
-                return completion(.failure(URLError(.badServerResponse)))
+                return onSuccess(.failure(URLError(.badServerResponse)))
             }
 
             if let jsonString = String(data: data, encoding: .utf8) {
@@ -129,12 +137,12 @@ final class LibreLinkUpAPI {
                         return GlucoseReading(id: timestampStr, value: value, timestamp: date)
                     }
 
-                    completion(.success(readings))
+                    onSuccess(.success(readings))
                 } else {
                     throw NSError(domain: "GraphDataError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to parse glucose data"])
                 }
             } catch {
-                completion(.failure(error))
+                onSuccess(.failure(error))
             }
 
         }.resume()
