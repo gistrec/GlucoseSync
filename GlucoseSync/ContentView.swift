@@ -4,8 +4,6 @@ import BackgroundTasks
 
 
 struct ContentView: View {
-    @StateObject private var viewModel = HealthKitViewModel()
-
     @AppStorage("userEmail") private var email = ""
     @AppStorage("userPassword") private var password = ""
 

@@ -118,7 +118,7 @@ final class LibreLinkUpAPI {
         onSuccess: @escaping ([GlucoseReading]) -> Void,
         onError: @escaping (String) -> Void
     ) {
-        guard let url = URL(string: "\(baseURL)//llu/connections/\(accountId)/graph") else {
+        guard let url = URL(string: "\(baseURL)/llu/connections/\(accountId)/graph") else {
             onError("Invalid login URL")
             return
         }
