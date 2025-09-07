@@ -18,6 +18,8 @@ final class KeychainService {
 
         var attributes = query
         attributes[kSecValueData as String] = data
+        // Make credentials readable to background tasks even when the device is locked
+        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         let status = SecItemAdd(attributes as CFDictionary, nil)
         return status == errSecSuccess
     }
