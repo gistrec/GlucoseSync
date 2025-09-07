@@ -34,6 +34,12 @@ struct ContentView: View {
                     Text("Glucose Sync")
                         .font(.largeTitle)
 
+                    Text("Sync your Libre3 glucose readings with Apple Health")
+                        .font(.subheadline)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.gray)
+                        .padding(.horizontal)
+
                     if lastSyncDate > 0 {
                         let date = Date(timeIntervalSince1970: lastSyncDate)
                         Text("Last sync: \(formatted(date))")
@@ -41,27 +47,41 @@ struct ContentView: View {
                             .foregroundColor(.gray)
                     }
 
-                    TextField("Email (LibreLinkUp)", text: $email)
-                        .textContentType(.emailAddress)
-                        .autocapitalization(.none)
-                        .keyboardType(.emailAddress)
-                        .padding()
-                        .background(Color(UIColor.secondarySystemBackground))
-                        .cornerRadius(8)
-                        .disabled(isSyncing)
-                        .onChange(of: email) {
-                            KeychainService.shared.set(email, for: "userEmail")
-                        }
+                    HStack {
+                        Image(systemName: "envelope")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 20, height: 20)
+                            .foregroundColor(.gray)
+                        TextField("Email", text: $email)
+                            .textContentType(.emailAddress)
+                            .autocapitalization(.none)
+                            .keyboardType(.emailAddress)
+                    }
+                    .padding()
+                    .background(Color(UIColor.secondarySystemBackground))
+                    .cornerRadius(8)
+                    .disabled(isSyncing)
+                    .onChange(of: email) {
+                        KeychainService.shared.set(email, for: "userEmail")
+                    }
 
-                    SecureField("Password", text: $password)
-                        .textContentType(.password)
-                        .padding()
-                        .background(Color(UIColor.secondarySystemBackground))
-                        .cornerRadius(8)
-                        .disabled(isSyncing)
-                        .onChange(of: password) {
-                            KeychainService.shared.set(password, for: "userPassword")
-                        }
+                    HStack {
+                        Image(systemName: "lock")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 20, height: 20)
+                            .foregroundColor(.gray)
+                        SecureField("Password", text: $password)
+                            .textContentType(.password)
+                    }
+                    .padding()
+                    .background(Color(UIColor.secondarySystemBackground))
+                    .cornerRadius(8)
+                    .disabled(isSyncing)
+                    .onChange(of: password) {
+                        KeychainService.shared.set(password, for: "userPassword")
+                    }
 
                     Button("Request HealthKit Access") {
                         HealthKitViewModel.shared.requestAuthorization(
@@ -74,7 +94,8 @@ struct ContentView: View {
                             }
                         )
                     }
-                    .buttonStyle(.borderedProminent)
+                    .cornerRadius(8)
+                    .buttonStyle(.bordered)
                     .disabled(isSyncing)
 
                     Button("Sync Glucose from Server") {
@@ -93,7 +114,8 @@ struct ContentView: View {
                             }
                         )
                     }
-                    .buttonStyle(.bordered)
+                    .cornerRadius(8)
+                    .buttonStyle(.borderedProminent)
                     .disabled(isSyncing)
                 }
                 .padding()
