@@ -10,7 +10,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     ) -> Bool {
         // 1) Регистрация хэндлера
         BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.gistrec.glucosesync.refresh", using: nil) { task in
-            self.handleGlucoseSync(task: task as! BGAppRefreshTask)
+            // Ensure the task is of the expected type; otherwise mark it as failed
+            guard let refreshTask = task as? BGAppRefreshTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            self.handleGlucoseSync(task: refreshTask)
         }
 
         // 2) Первичное планирование
