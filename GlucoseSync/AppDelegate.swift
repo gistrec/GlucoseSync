@@ -36,7 +36,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         print("🔁 Cancelled existing task requests")
 
         let request = BGAppRefreshTaskRequest(identifier: identifier)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60) // каждый час
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 10 * 60) // каждые 10 минут
 
         do {
             try BGTaskScheduler.shared.submit(request)

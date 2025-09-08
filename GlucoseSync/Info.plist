@@ -17,14 +17,20 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Мы используем HealthKit для чтения данных</string>
+	<string>We read your Health data to improve syncing and avoid duplicates</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Мы записываем глюкозу в Apple Health для отслеживания</string>
+	<string>We write your glucose data to Apple Health so you can track it over time</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string></string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
 </dict>
 </plist>
