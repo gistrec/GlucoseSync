@@ -27,7 +27,14 @@ The app is written in SwiftUI, talks only to Abbott’s official LibreView cloud
 3. **Login in GlucoseSync**  
    The user enters their LibreLinkUp credentials in GlucoseSync.  
    → The app calls `https://api-de.libreview.io/llu/auth/login`  
-   → Receives an **access token** and an **account identifier**.  
+   → Receives an **access token** and an **account identifier**, both stored in the Keychain.  
+
+   This happens once. The token is good for months, and the app reuses it on
+   every later sync — logging in again only when the server rejects it with a
+   401. LibreView rate-limits `/llu/auth/login` hard: a burst of logins is
+   answered with HTTP 476 and the account is blocked for up to a day, so a
+   background task that logged in every 10 minutes would eventually lock
+   itself out.
 
 4. **Download Glucose Data**  
    Using the token and account ID, the app fetches measurements from LibreView Cloud:  

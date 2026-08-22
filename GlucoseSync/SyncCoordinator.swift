@@ -20,34 +20,26 @@ final class SyncCoordinator {
             return
         }
 
-        LibreLinkUpAPI.shared.login(
+        // readings() сам решает, нужен ли вход: сохранённая сессия
+        // переиспользуется, логин случается только после отказа сервера.
+        LibreLinkUpAPI.shared.readings(
             email: email,
             password: password,
-            onSuccess: { token, accountId in
-                LibreLinkUpAPI.shared.fetchGlucose(
-                    token: token,
-                    accountId: accountId,
-                    onSuccess: { readings in
-                        let group = DispatchGroup()
-                        for reading in readings {
-                            group.enter()
-                            self.saveGlucoseSample(value: reading.value, date: reading.timestamp, externalId: reading.id) {
-                                group.leave()
-                            }
-                        }
-                        group.notify(queue: .main) {
-                            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastSyncDate")
-                            onSuccess()
-                        }
-                    },
-                    onError: { errorMessage in
-                        onError(errorMessage)
+            onSuccess: { readings in
+                let group = DispatchGroup()
+                for reading in readings {
+                    group.enter()
+                    self.saveGlucoseSample(value: reading.value, date: reading.timestamp, externalId: reading.id) {
+                        group.leave()
                     }
-                )
+                }
+                group.notify(queue: .main) {
+                    UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastSyncDate")
+                    onSuccess()
+                }
             },
             onError: { errorMessage in
                 onError(errorMessage)
-                return
             }
         )
     }

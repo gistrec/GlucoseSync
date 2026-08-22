@@ -64,6 +64,8 @@ struct ContentView: View {
                     .disabled(isSyncing)
                     .onChange(of: email) {
                         KeychainService.shared.set(email, for: "userEmail")
+                        // Сохранённый токен принадлежит прежнему аккаунту.
+                        LibreLinkUpAPI.shared.forgetSession()
                     }
 
                     HStack {
@@ -81,6 +83,7 @@ struct ContentView: View {
                     .disabled(isSyncing)
                     .onChange(of: password) {
                         KeychainService.shared.set(password, for: "userPassword")
+                        LibreLinkUpAPI.shared.forgetSession()
                     }
 
                     Button("Request HealthKit Access") {
