@@ -29,9 +29,9 @@ final class SyncCoordinator {
                 let group = DispatchGroup()
                 for reading in readings {
                     group.enter()
-                    self.saveGlucoseSample(value: reading.value, date: reading.timestamp, externalId: reading.id) {
+                    self.saveGlucoseSample(value: reading.value, date: reading.timestamp, externalId: reading.id, onFinish: {
                         group.leave()
-                    }
+                    })
                 }
                 group.notify(queue: .main) {
                     UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastSyncDate")
@@ -48,9 +48,17 @@ final class SyncCoordinator {
         value: Double,
         date: Date,
         externalId: String,
-        onSuccess: @escaping () -> Void
+        onFinish: @escaping () -> Void
     ) {
-        guard let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose) else { return }
+        // Выход отсюда обязан вызвать onFinish: наверху уже сделан
+        // group.enter(), и без парного leave() DispatchGroup не сработает
+        // никогда — интерфейс останется в «Syncing…» навсегда, а фоновая
+        // задача не дойдёт до setTaskCompleted, за что iOS урезает ей время.
+        guard let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose) else {
+            print("❌ Blood glucose type unavailable")
+            onFinish()
+            return
+        }
 
         let glucoseMolarMass = 180.15588 // г/моль
         let unit = HKUnit.moleUnit(with: .milli, molarMass: glucoseMolarMass).unitDivided(by: .liter()) // mmol/L
@@ -79,7 +87,7 @@ final class SyncCoordinator {
                 } else {
                     print("❌ Save failed: \(error?.localizedDescription ?? "unknown")")
                 }
-                onSuccess()
+                onFinish()
             }
         }
     }
