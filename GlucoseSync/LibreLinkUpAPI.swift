@@ -34,7 +34,19 @@ final class LibreLinkUpAPI {
     static let shared = LibreLinkUpAPI()
     private init() {}
 
-    private let baseURL = "https://api-de.libreview.io"
+    // Аккаунт живёт в конкретном регионе, и вход в чужой отвечает не токеном,
+    // а редиректом на нужный. Регион запоминается, чтобы следующий запуск сразу
+    // шёл по верному адресу.
+    private let defaultRegion = "de"
+    private let regionKey = "libreRegion"
+
+    private var region: String {
+        UserDefaults.standard.string(forKey: regionKey) ?? defaultRegion
+    }
+
+    private var baseURL: String {
+        "https://api-\(region).libreview.io"
+    }
 
     // Сессия лежит в Keychain рядом с паролем: токен действует месяцами и
     // переживать перезапуски приложения должен так же, как учётные данные.
@@ -244,6 +256,7 @@ final class LibreLinkUpAPI {
     func login(
         email: String,
         password: String,
+        followingRedirect: Bool = false,
         onSuccess: @escaping (_ token: String, _ accountId: String) -> Void,
         onError: @escaping (LibreLinkUpFailure) -> Void
     ) {
@@ -310,11 +323,27 @@ final class LibreLinkUpAPI {
                 }
 
                 // Аккаунт привязан к региону: вход в чужой отвечает не токеном,
-                // а редиректом на нужный.
+                // а редиректом на нужный. Запоминаем регион и повторяем — один
+                // раз, чтобы зацикленный редирект не превратился в бесконечную
+                // серию логинов, за которую Abbott блокирует аккаунт.
                 if let dataDict = top["data"] as? [String: Any],
+                   dataDict["redirect"] as? Bool == true,
                    let region = dataDict["region"] as? String
                 {
-                    onError(.message("Account belongs to region \(region.uppercased()); this build talks to api-de."))
+                    guard !followingRedirect else {
+                        onError(.message("LibreView keeps redirecting between regions (last: \(region.uppercased()))."))
+                        return
+                    }
+
+                    print("↪️ Switching to region \(region)")
+                    UserDefaults.standard.set(region.lowercased(), forKey: self.regionKey)
+                    self.login(
+                        email: email,
+                        password: password,
+                        followingRedirect: true,
+                        onSuccess: onSuccess,
+                        onError: onError
+                    )
                     return
                 }
 
