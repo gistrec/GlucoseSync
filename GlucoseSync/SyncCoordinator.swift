@@ -84,11 +84,14 @@ final class SyncCoordinator {
             return
         }
 
-        let glucoseMolarMass = 180.15588 // г/моль
-        let unit = HKUnit.moleUnit(with: .milli, molarMass: glucoseMolarMass).unitDivided(by: .liter()) // mmol/L
-        let valueMmolL = value / 18.0  // <-- тут конвертация из mg/dL
-        let quantity = HKQuantity(unit: unit, doubleValue: valueMmolL)
-        
+        // Записываем в тех единицах, в которых пришли (ValueInMgPerDl), и не
+        // конвертируем вручную: HealthKit сам переведёт значение в единицы,
+        // выбранные пользователем. Прежний код делил на 18.0, хотя единицу
+        // строил из точной молярной массы 180.15588 — два разных коэффициента
+        // в трёх строках, расходящихся на 0,1%.
+        let unit = HKUnit.gramUnit(with: .milli).unitDivided(by: .literUnit(with: .deci))
+        let quantity = HKQuantity(unit: unit, doubleValue: value)
+
         print("💡 Saving externalId: \(externalId)")
         
         let sample = HKQuantitySample(
@@ -107,7 +110,7 @@ final class SyncCoordinator {
         healthStore.save(sample) { success, error in
             DispatchQueue.main.async {
                 if success {
-                    print("✅ Saved \(valueMmolL) mmol/L @ \(date)")
+                    print("✅ Saved \(value) mg/dL @ \(date)")
                     onFinish(nil)
                 } else {
                     let message = error?.localizedDescription ?? "unknown error"
