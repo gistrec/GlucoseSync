@@ -40,6 +40,7 @@ final class LibreLinkUpAPI {
     // переживать перезапуски приложения должен так же, как учётные данные.
     private let tokenKey = "libreToken"
     private let accountIdKey = "libreAccountId"
+    private let patientIdKey = "librePatientId"
 
     private var defaultHeaders: [String: String] {
         [
@@ -74,22 +75,25 @@ final class LibreLinkUpAPI {
 
     // MARK: - Session
 
-    private var storedSession: (token: String, accountId: String)? {
+    private var storedSession: (token: String, accountId: String, patientId: String)? {
         guard let token = KeychainService.shared.get(tokenKey),
-              let accountId = KeychainService.shared.get(accountIdKey) else {
+              let accountId = KeychainService.shared.get(accountIdKey),
+              let patientId = KeychainService.shared.get(patientIdKey) else {
             return nil
         }
-        return (token, accountId)
+        return (token, accountId, patientId)
     }
 
-    private func storeSession(token: String, accountId: String) {
+    private func storeSession(token: String, accountId: String, patientId: String) {
         KeychainService.shared.set(token, for: tokenKey)
         KeychainService.shared.set(accountId, for: accountIdKey)
+        KeychainService.shared.set(patientId, for: patientIdKey)
     }
 
     private func clearSession() {
         KeychainService.shared.remove(tokenKey)
         KeychainService.shared.remove(accountIdKey)
+        KeychainService.shared.remove(patientIdKey)
     }
 
     /// Забыть сессию при смене учётных данных. Токен привязан к аккаунту, и
@@ -118,6 +122,7 @@ final class LibreLinkUpAPI {
         fetchGlucose(
             token: session.token,
             accountId: session.accountId,
+            patientId: session.patientId,
             onSuccess: onSuccess,
             onError: { [weak self] failure in
                 guard case .unauthorized = failure else {
@@ -144,16 +149,74 @@ final class LibreLinkUpAPI {
             email: email,
             password: password,
             onSuccess: { [weak self] token, accountId in
-                self?.storeSession(token: token, accountId: accountId)
-                self?.fetchGlucose(
+                // Идентификатор пациента спрашиваем у сервера, а не берём
+                // accountId: это разные сущности, и совпадают они только когда
+                // аккаунт следит за собственным сенсором.
+                self?.fetchPatientId(
                     token: token,
                     accountId: accountId,
-                    onSuccess: onSuccess,
+                    onSuccess: { patientId in
+                        self?.storeSession(token: token, accountId: accountId, patientId: patientId)
+                        self?.fetchGlucose(
+                            token: token,
+                            accountId: accountId,
+                            patientId: patientId,
+                            onSuccess: onSuccess,
+                            onError: { onError($0.text) }
+                        )
+                    },
                     onError: { onError($0.text) }
                 )
             },
             onError: { onError($0.text) }
         )
+    }
+
+    /// Кого читаем. `/llu/connections` перечисляет пациентов, к которым
+    /// подключён аккаунт; их `patientId` и адресует график.
+    func fetchPatientId(
+        token: String,
+        accountId: String,
+        onSuccess: @escaping (String) -> Void,
+        onError: @escaping (LibreLinkUpFailure) -> Void
+    ) {
+        guard let url = URL(string: "\(baseURL)/llu/connections") else {
+            onError(.message("Invalid connections URL"))
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.allHTTPHeaderFields = defaultHeaders.merging([
+            "Authorization": "Bearer \(token)",
+            "account-id": sha256(accountId)
+        ]) { $1 }
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                onError(.message("Network request failed: \(error.localizedDescription)"))
+                return
+            }
+
+            if let failure = self.failure(for: response, data: data) {
+                onError(failure)
+                return
+            }
+
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let connections = json["data"] as? [[String: Any]] else {
+                onError(.message("Failed to parse connections"))
+                return
+            }
+
+            guard let patientId = connections.first?["patientId"] as? String else {
+                onError(.message("No sensor is shared with this LibreLinkUp account yet — link it in the Libre 3 app."))
+                return
+            }
+
+            onSuccess(patientId)
+        }.resume()
     }
 
     // MARK: - Requests
@@ -268,10 +331,14 @@ final class LibreLinkUpAPI {
     func fetchGlucose(
         token: String,
         accountId: String,
+        patientId: String,
         onSuccess: @escaping ([GlucoseReading]) -> Void,
         onError: @escaping (LibreLinkUpFailure) -> Void
     ) {
-        guard let url = URL(string: "\(baseURL)/llu/connections/\(accountId)/graph") else {
+        // Адресуемся patientId. С accountId сервер отвечает 200 и пустым
+        // телом — не ошибкой, поэтому подмена оставалась незаметной, пока
+        // аккаунт следил за собственным сенсором и они совпадали.
+        guard let url = URL(string: "\(baseURL)/llu/connections/\(patientId)/graph") else {
             onError(.message("Invalid graph URL"))
             return
         }
