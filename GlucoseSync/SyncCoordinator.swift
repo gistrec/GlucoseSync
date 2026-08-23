@@ -27,13 +27,37 @@ final class SyncCoordinator {
             password: password,
             onSuccess: { readings in
                 let group = DispatchGroup()
+                // Счётчик под замком: колбэки HealthKit приходят на своей
+                // очереди, инкремент из нескольких потоков иначе гонка.
+                let lock = NSLock()
+                var saved = 0
+                var lastError: String?
+
                 for reading in readings {
                     group.enter()
-                    self.saveGlucoseSample(value: reading.value, date: reading.timestamp, externalId: reading.id, onFinish: {
-                        group.leave()
-                    })
+                    self.saveGlucoseSample(
+                        value: reading.value,
+                        date: reading.timestamp,
+                        externalId: reading.id,
+                        onFinish: { error in
+                            lock.lock()
+                            if let error = error { lastError = error } else { saved += 1 }
+                            lock.unlock()
+                            group.leave()
+                        }
+                    )
                 }
+
                 group.notify(queue: .main) {
+                    // Если не записалось ничего, синхронизация не удалась —
+                    // чаще всего это значит, что не выдан доступ к Health.
+                    // Прежде такой случай рапортовал об успехе, и о том, что
+                    // в Health пусто, узнать было неоткуда.
+                    if saved == 0, !readings.isEmpty {
+                        onError(lastError ?? "Could not write any readings to Apple Health. Check the app's Health permissions.")
+                        return
+                    }
+
                     UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastSyncDate")
                     onSuccess()
                 }
@@ -48,7 +72,7 @@ final class SyncCoordinator {
         value: Double,
         date: Date,
         externalId: String,
-        onFinish: @escaping () -> Void
+        onFinish: @escaping (_ error: String?) -> Void
     ) {
         // Выход отсюда обязан вызвать onFinish: наверху уже сделан
         // group.enter(), и без парного leave() DispatchGroup не сработает
@@ -56,7 +80,7 @@ final class SyncCoordinator {
         // задача не дойдёт до setTaskCompleted, за что iOS урезает ей время.
         guard let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose) else {
             print("❌ Blood glucose type unavailable")
-            onFinish()
+            onFinish("Blood glucose is not available on this device")
             return
         }
 
@@ -84,10 +108,12 @@ final class SyncCoordinator {
             DispatchQueue.main.async {
                 if success {
                     print("✅ Saved \(valueMmolL) mmol/L @ \(date)")
+                    onFinish(nil)
                 } else {
-                    print("❌ Save failed: \(error?.localizedDescription ?? "unknown")")
+                    let message = error?.localizedDescription ?? "unknown error"
+                    print("❌ Save failed: \(message)")
+                    onFinish(message)
                 }
-                onFinish()
             }
         }
     }
