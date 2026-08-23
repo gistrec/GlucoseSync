@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (unsigned)
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcodebuild -list -project GlucoseSync.xcodeproj
+
+      # Подпись требует сертификата разработчика, которого у CI нет и быть не
+      # должно. Компилируется при этом ровно то же самое, а ошибки компиляции
+      # этот прогон и должен ловить — включая те файлы, что тянут UIKit и
+      # потому не проверяются на машине без Xcode.
+      - name: Build
+        run: |
+          xcodebuild build \
+            -project GlucoseSync.xcodeproj \
+            -scheme GlucoseSync \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM=""
