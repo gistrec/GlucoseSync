@@ -386,7 +386,17 @@ final class LibreLinkUpAPI {
                     return
                 }
 
-                let readings: [GlucoseReading] = graphData.compactMap { dict -> GlucoseReading? in
+                // graphData — это история, и она отстаёт от сенсора: текущий
+                // замер лежит отдельно, в connection.glucoseMeasurement. Без
+                // него в Health всегда попадало прошлое, а самое свежее
+                // значение терялось до следующей синхронизации.
+                var entries = graphData
+                if let connection = dataDict["connection"] as? [String: Any],
+                   let current = connection["glucoseMeasurement"] as? [String: Any] {
+                    entries.append(current)
+                }
+
+                let readings: [GlucoseReading] = entries.compactMap { dict -> GlucoseReading? in
                     guard let value = dict["ValueInMgPerDl"] as? Double,
                           let timestampStr = dict["Timestamp"] as? String,
                           let date = self.parseLibreDate(timestampStr) else {
@@ -395,12 +405,12 @@ final class LibreLinkUpAPI {
                     return GlucoseReading(id: timestampStr, value: value, timestamp: date)
                 }
 
-                // Пустой graphData — норма: сервер молчит, пока не активен
+                // Пустой ответ — норма: сервер молчит, пока не активен
                 // сенсор. А вот отброшенные до единого записи означают, что
                 // формат ответа разошёлся с разбором, и рапортовать успех
                 // здесь нельзя — именно так эта ошибка и оставалась незаметной.
-                if readings.isEmpty && !graphData.isEmpty {
-                    onError(.message("Received \(graphData.count) readings but could not parse any of them"))
+                if readings.isEmpty && !entries.isEmpty {
+                    onError(.message("Received \(entries.count) readings but could not parse any of them"))
                     return
                 }
 
