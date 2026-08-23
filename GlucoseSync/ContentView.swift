@@ -62,9 +62,14 @@ struct ContentView: View {
                     .background(Color(UIColor.secondarySystemBackground))
                     .cornerRadius(8)
                     .disabled(isSyncing)
+                    // Сбрасываем сессию только когда значение действительно
+                    // сменилось. onAppear подставляет сюда сохранённый email,
+                    // и это тоже срабатывание onChange — без проверки сессия
+                    // стиралась при каждом запуске приложения, то есть кеш
+                    // токена не работал вовсе.
                     .onChange(of: email) {
+                        guard KeychainService.shared.get("userEmail") != email else { return }
                         KeychainService.shared.set(email, for: "userEmail")
-                        // Сохранённый токен принадлежит прежнему аккаунту.
                         LibreLinkUpAPI.shared.forgetSession()
                     }
 
@@ -82,6 +87,7 @@ struct ContentView: View {
                     .cornerRadius(8)
                     .disabled(isSyncing)
                     .onChange(of: password) {
+                        guard KeychainService.shared.get("userPassword") != password else { return }
                         KeychainService.shared.set(password, for: "userPassword")
                         LibreLinkUpAPI.shared.forgetSession()
                     }
