@@ -62,6 +62,13 @@ final class LibreLinkUpAPI {
         let formatter = DateFormatter()
         formatter.dateFormat = "M/d/yyyy h:mm:ss a"
         formatter.timeZone = .current
+        // Формат фиксированный, а не пользовательский, поэтому и локаль нужна
+        // фиксированная. С локалью устройства символ AM/PM ожидается на языке
+        // системы: на русском или сербском телефоне "8/22/2026 2:32:02 AM" не
+        // разбирается, date(from:) возвращает nil, и все замеры молча
+        // отбрасываются в compactMap ниже — синхронизация «успешна», в Health
+        // пусто.
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter.date(from: string)
     }
 
@@ -319,6 +326,15 @@ final class LibreLinkUpAPI {
                         return nil
                     }
                     return GlucoseReading(id: timestampStr, value: value, timestamp: date)
+                }
+
+                // Пустой graphData — норма: сервер молчит, пока не активен
+                // сенсор. А вот отброшенные до единого записи означают, что
+                // формат ответа разошёлся с разбором, и рапортовать успех
+                // здесь нельзя — именно так эта ошибка и оставалась незаметной.
+                if readings.isEmpty && !graphData.isEmpty {
+                    onError(.message("Received \(graphData.count) readings but could not parse any of them"))
+                    return
                 }
 
                 onSuccess(readings)
