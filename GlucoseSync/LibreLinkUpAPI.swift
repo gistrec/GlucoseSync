@@ -428,19 +428,17 @@ final class LibreLinkUpAPI {
                     entries.append(current)
                 }
 
-                // Ключ дедупликации строим из момента времени, а не из строки:
-                // раскладка сервера может смениться, момент — нет.
+                // Идентификатор остаётся прежним — строкой Timestamp: он уже
+                // разошёлся по Health у выпущенной версии, и смена схемы
+                // означала бы не исправление записей, а вторую их копию.
                 let readings: [GlucoseReading] = entries.compactMap { dict -> GlucoseReading? in
                     guard let value = dict["ValueInMgPerDl"] as? Double,
-                          let timestampStr = dict["FactoryTimestamp"] as? String,
-                          let date = self.parseLibreDate(timestampStr) else {
+                          let localStr = dict["Timestamp"] as? String,
+                          let utcStr = dict["FactoryTimestamp"] as? String,
+                          let date = self.parseLibreDate(utcStr) else {
                         return nil
                     }
-                    return GlucoseReading(
-                        id: String(Int(date.timeIntervalSince1970)),
-                        value: value,
-                        timestamp: date
-                    )
+                    return GlucoseReading(id: localStr, value: value, timestamp: date)
                 }
 
                 // Пустой ответ — норма: сервер молчит, пока не активен
