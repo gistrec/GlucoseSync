@@ -103,6 +103,15 @@ final class LibreLinkUpAPI {
     }
 
     private func storeSession(token: String, accountId: String, patientId: String) {
+        // Отметка истории принадлежит пациенту, а не учётным данным: сравнив
+        // её с замерами другого человека, приложение показало бы выдуманный
+        // разрыв либо перестало замечать настоящие. Смена же пароля у того же
+        // аккаунта отметку сохраняет.
+        if KeychainService.shared.get(patientIdKey) != patientId {
+            UserDefaults.standard.removeObject(forKey: "lastReadingDate")
+            UserDefaults.standard.removeObject(forKey: "historyGap")
+        }
+
         KeychainService.shared.set(token, for: tokenKey)
         KeychainService.shared.set(accountId, for: accountIdKey)
         KeychainService.shared.set(patientId, for: patientIdKey)
@@ -118,11 +127,6 @@ final class LibreLinkUpAPI {
     /// без сброса приложение продолжило бы тянуть данные прежнего.
     func forgetSession() {
         clearSession()
-        // История замеров тоже принадлежит прежнему пациенту: сравнив его
-        // отметку с данными нового, приложение показало бы выдуманный разрыв
-        // либо, наоборот, перестало замечать настоящие.
-        UserDefaults.standard.removeObject(forKey: "lastReadingDate")
-        UserDefaults.standard.removeObject(forKey: "historyGap")
     }
 
     /// Единственная точка входа для синхронизации.

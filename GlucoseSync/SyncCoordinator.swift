@@ -44,6 +44,11 @@ final class SyncCoordinator {
                 let lock = NSLock()
                 var saved = 0
                 var lastError: String?
+                // Границы того, что реально легло в Health, а не того, что
+                // приехало с сервера: отметка не должна перешагнуть замер,
+                // который HealthKit отверг.
+                var savedOldest = Double.greatestFiniteMagnitude
+                var savedNewest = 0.0
 
                 for reading in readings {
                     group.enter()
@@ -52,8 +57,15 @@ final class SyncCoordinator {
                         date: reading.timestamp,
                         externalId: reading.id,
                         onFinish: { error in
+                            let stamp = reading.timestamp.timeIntervalSince1970
                             lock.lock()
-                            if let error = error { lastError = error } else { saved += 1 }
+                            if let error = error {
+                                lastError = error
+                            } else {
+                                saved += 1
+                                savedOldest = min(savedOldest, stamp)
+                                savedNewest = max(savedNewest, stamp)
+                            }
                             lock.unlock()
                             group.leave()
                         }
@@ -74,12 +86,11 @@ final class SyncCoordinator {
                     // эндпоинта нет, как и у /logbook. Догрузить пропущенное
                     // нечем, поэтому единственное, что здесь можно сделать
                     // честно, — показать пользователю размер дыры.
-                    let stamps = readings.map(\.timestamp.timeIntervalSince1970)
-                    if let oldest = stamps.min(), let newest = stamps.max() {
-                        if lastReading > 0, oldest - lastReading > 30 * 60 {
-                            UserDefaults.standard.set(oldest - lastReading, forKey: "historyGap")
+                    if saved > 0 {
+                        if lastReading > 0, savedOldest - lastReading > 30 * 60 {
+                            UserDefaults.standard.set(savedOldest - lastReading, forKey: "historyGap")
                         }
-                        UserDefaults.standard.set(max(lastReading, newest), forKey: "lastReadingDate")
+                        UserDefaults.standard.set(max(lastReading, savedNewest), forKey: "lastReadingDate")
                     }
 
                     UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastSyncDate")
