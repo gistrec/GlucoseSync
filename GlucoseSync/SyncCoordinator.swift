@@ -36,9 +36,10 @@ final class SyncCoordinator {
                 // Отметка последнего записанного замера, а не последней
                 // синхронизации: при снятом сенсоре синхронизации проходят с
                 // пустым ответом, и вторая отметка занизила бы разрыв.
-                // Читаем здесь, а не до запроса: к этому моменту readings()
-                // уже определил пациента и, если тот сменился, отметку сбросил.
-                let lastReading = UserDefaults.standard.double(forKey: "lastReadingDate")
+                // Читаем здесь, а не до запроса: ключ зависит от пациента,
+                // а его определяет readings().
+                let baselineKey = LibreLinkUpAPI.shared.historyBaselineKey
+                let lastReading = baselineKey.map { UserDefaults.standard.double(forKey: $0) } ?? 0
 
                 let group = DispatchGroup()
                 // Счётчик под замком: колбэки HealthKit приходят на своей
@@ -88,11 +89,14 @@ final class SyncCoordinator {
                     // эндпоинта нет, как и у /logbook. Догрузить пропущенное
                     // нечем, поэтому единственное, что здесь можно сделать
                     // честно, — показать пользователю размер дыры.
-                    if saved > 0 {
+                    // Отметку двигаем только когда записалось всё: пропусти она
+                    // отвергнутый замер, и он выпал бы из окна сервера, так и
+                    // не попав ни в Health, ни в предупреждение.
+                    if let baselineKey, saved > 0, saved == readings.count {
                         if lastReading > 0, savedOldest - lastReading > 30 * 60 {
                             UserDefaults.standard.set(savedOldest - lastReading, forKey: "historyGap")
                         }
-                        UserDefaults.standard.set(max(lastReading, savedNewest), forKey: "lastReadingDate")
+                        UserDefaults.standard.set(max(lastReading, savedNewest), forKey: baselineKey)
                     }
 
                     UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastSyncDate")
