@@ -115,6 +115,11 @@ final class LibreLinkUpAPI {
     /// без сброса приложение продолжило бы тянуть данные прежнего.
     func forgetSession() {
         clearSession()
+        // История замеров тоже принадлежит прежнему пациенту: сравнив его
+        // отметку с данными нового, приложение показало бы выдуманный разрыв
+        // либо, наоборот, перестало замечать настоящие.
+        UserDefaults.standard.removeObject(forKey: "lastReadingDate")
+        UserDefaults.standard.removeObject(forKey: "historyGap")
     }
 
     /// Единственная точка входа для синхронизации.
