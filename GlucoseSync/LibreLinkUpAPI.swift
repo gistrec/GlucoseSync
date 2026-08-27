@@ -109,6 +109,16 @@ final class LibreLinkUpAPI {
     }
 
     private func clearSession() {
+        // Владельца записей в Health фиксируем до того, как потеряем его
+        // идентификатор. У обновившейся установки записи в Health уже есть,
+        // а отметки владельца ещё нет: смени пользователь учётные данные до
+        // первой синхронизации — и следующий пациент присвоил бы себе чужие
+        // ключи, а с возросшей версией сэмпла и сами чужие записи.
+        if UserDefaults.standard.string(forKey: healthOwnerKey) == nil,
+           let patientId = KeychainService.shared.get(patientIdKey) {
+            UserDefaults.standard.set(patientId, forKey: healthOwnerKey)
+        }
+
         KeychainService.shared.remove(tokenKey)
         KeychainService.shared.remove(accountIdKey)
         KeychainService.shared.remove(patientIdKey)
