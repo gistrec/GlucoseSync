@@ -54,6 +54,9 @@ final class LibreLinkUpAPI {
     private let accountIdKey = "libreAccountId"
     private let patientIdKey = "librePatientId"
 
+    // Чьи замеры уже лежат в Health под идентификаторами без префикса.
+    private let healthOwnerKey = "healthOwnerPatientId"
+
     private var defaultHeaders: [String: String] {
         [
             "accept-encoding": "gzip",
@@ -431,6 +434,17 @@ final class LibreLinkUpAPI {
                 // Идентификатор остаётся прежним — строкой Timestamp: он уже
                 // разошёлся по Health у выпущенной версии, и смена схемы
                 // означала бы не исправление записей, а вторую их копию.
+                //
+                // Но принадлежат те записи одному конкретному пациенту. Замеры
+                // любого другого нельзя класть под теми же ключами: строки
+                // локального времени у разных людей совпадают, а с возросшей
+                // версией Health заменит ими чужие записи вместо своих.
+                let owner = UserDefaults.standard.string(forKey: self.healthOwnerKey)
+                if owner == nil {
+                    UserDefaults.standard.set(patientId, forKey: self.healthOwnerKey)
+                }
+                let prefix = (owner == nil || owner == patientId) ? "" : "\(patientId)-"
+
                 let readings: [GlucoseReading] = entries.compactMap { dict -> GlucoseReading? in
                     guard let value = dict["ValueInMgPerDl"] as? Double,
                           let localStr = dict["Timestamp"] as? String,
@@ -438,7 +452,7 @@ final class LibreLinkUpAPI {
                           let date = self.parseLibreDate(utcStr) else {
                         return nil
                     }
-                    return GlucoseReading(id: localStr, value: value, timestamp: date)
+                    return GlucoseReading(id: prefix + localStr, value: value, timestamp: date)
                 }
 
                 // Пустой ответ — норма: сервер молчит, пока не активен
