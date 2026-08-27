@@ -54,7 +54,9 @@ final class LibreLinkUpAPI {
     private let accountIdKey = "libreAccountId"
     private let patientIdKey = "librePatientId"
 
-    // Чьи замеры уже лежат в Health под идентификаторами без префикса.
+    // Чьи замеры уже лежат в Health под идентификаторами без префикса. В
+    // Keychain, а не в UserDefaults: переустановка стирает вторые, но не
+    // первый — и не сами записи в Health, которые эта отметка описывает.
     private let healthOwnerKey = "healthOwnerPatientId"
 
     private var defaultHeaders: [String: String] {
@@ -114,9 +116,9 @@ final class LibreLinkUpAPI {
         // а отметки владельца ещё нет: смени пользователь учётные данные до
         // первой синхронизации — и следующий пациент присвоил бы себе чужие
         // ключи, а с возросшей версией сэмпла и сами чужие записи.
-        if UserDefaults.standard.string(forKey: healthOwnerKey) == nil,
+        if KeychainService.shared.get(healthOwnerKey) == nil,
            let patientId = KeychainService.shared.get(patientIdKey) {
-            UserDefaults.standard.set(patientId, forKey: healthOwnerKey)
+            KeychainService.shared.set(patientId, for: healthOwnerKey)
         }
 
         KeychainService.shared.remove(tokenKey)
@@ -449,9 +451,9 @@ final class LibreLinkUpAPI {
                 // любого другого нельзя класть под теми же ключами: строки
                 // локального времени у разных людей совпадают, а с возросшей
                 // версией Health заменит ими чужие записи вместо своих.
-                let owner = UserDefaults.standard.string(forKey: self.healthOwnerKey)
+                let owner = KeychainService.shared.get(self.healthOwnerKey)
                 if owner == nil {
-                    UserDefaults.standard.set(patientId, forKey: self.healthOwnerKey)
+                    KeychainService.shared.set(patientId, for: self.healthOwnerKey)
                 }
                 let prefix = (owner == nil || owner == patientId) ? "" : "\(patientId)-"
 
