@@ -54,6 +54,16 @@ final class LibreLinkUpAPI {
     private let accountIdKey = "libreAccountId"
     private let patientIdKey = "librePatientId"
 
+    // Дефолтные 60 секунд на запрос считались под интерактивный сценарий.
+    // Здесь же вызовы идут цепочкой из фоновой задачи, которой система даёт
+    // порядка полуминуты на всё про всё.
+    private let urlSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 30
+        return URLSession(configuration: config)
+    }()
+
     private var defaultHeaders: [String: String] {
         [
             "accept-encoding": "gzip",
@@ -204,7 +214,7 @@ final class LibreLinkUpAPI {
             "account-id": sha256(accountId)
         ]) { $1 }
 
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        urlSession.dataTask(with: request) { data, response, error in
             if let error = error {
                 onError(.message("Network request failed: \(error.localizedDescription)"))
                 return
@@ -281,7 +291,7 @@ final class LibreLinkUpAPI {
             return
         }
 
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        urlSession.dataTask(with: request) { data, response, error in
             if let error = error {
                 onError(.message("Network request failed: \(error.localizedDescription)"))
                 return
@@ -379,7 +389,7 @@ final class LibreLinkUpAPI {
             "account-id": sha256(accountId)  // передаём ХЭШ!
         ]) { $1 }
 
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        urlSession.dataTask(with: request) { data, response, error in
             if let error = error {
                 onError(.message("Network request failed: \(error.localizedDescription)"))
                 return
