@@ -6,7 +6,11 @@ final class SyncCoordinator {
     static let shared = SyncCoordinator()
 
     private let healthStore = HKHealthStore()
-    
+
+    // Измеренное окно /graph — 11.7-11.9 часа. Округляем вверх: занижённый
+    // разрыв лучше выдуманного.
+    private static let graphWindow: TimeInterval = 12 * 3600
+
     private init() {}
 
     func syncGlucoseFromServer(
@@ -33,25 +37,12 @@ final class SyncCoordinator {
             email: email,
             password: password,
             onSuccess: { readings in
-                // Отметка последнего записанного замера, а не последней
-                // синхронизации: при снятом сенсоре синхронизации проходят с
-                // пустым ответом, и вторая отметка занизила бы разрыв.
-                // Читаем здесь, а не до запроса: ключ зависит от пациента,
-                // а его определяет readings().
-                let baselineKey = LibreLinkUpAPI.shared.historyBaselineKey
-                let lastReading = baselineKey.map { UserDefaults.standard.double(forKey: $0) } ?? 0
-
                 let group = DispatchGroup()
                 // Счётчик под замком: колбэки HealthKit приходят на своей
                 // очереди, инкремент из нескольких потоков иначе гонка.
                 let lock = NSLock()
                 var saved = 0
                 var lastError: String?
-                // Границы того, что реально легло в Health, а не того, что
-                // приехало с сервера: отметка не должна перешагнуть замер,
-                // который HealthKit отверг.
-                var savedOldest = Double.greatestFiniteMagnitude
-                var savedNewest = 0.0
 
                 for reading in readings {
                     group.enter()
@@ -60,15 +51,8 @@ final class SyncCoordinator {
                         date: reading.timestamp,
                         externalId: reading.id,
                         onFinish: { error in
-                            let stamp = reading.timestamp.timeIntervalSince1970
                             lock.lock()
-                            if let error = error {
-                                lastError = error
-                            } else {
-                                saved += 1
-                                savedOldest = min(savedOldest, stamp)
-                                savedNewest = max(savedNewest, stamp)
-                            }
+                            if let error = error { lastError = error } else { saved += 1 }
                             lock.unlock()
                             group.leave()
                         }
@@ -85,21 +69,17 @@ final class SyncCoordinator {
                         return
                     }
 
-                    // Окно /graph — около 12 часов, и параметров периода у
-                    // эндпоинта нет, как и у /logbook. Догрузить пропущенное
-                    // нечем, поэтому единственное, что здесь можно сделать
-                    // честно, — показать пользователю размер дыры.
-                    // Отметку двигаем только когда записалось всё: пропусти она
-                    // отвергнутый замер, и он выпал бы из окна сервера, так и
-                    // не попав ни в Health, ни в предупреждение.
-                    if let baselineKey, saved > 0, saved == readings.count {
-                        if lastReading > 0, savedOldest - lastReading > 30 * 60 {
-                            UserDefaults.standard.set(savedOldest - lastReading, forKey: "historyGap")
-                        }
-                        UserDefaults.standard.set(max(lastReading, savedNewest), forKey: baselineKey)
+                    // Сервер отдаёт фиксированное окно и параметров периода не
+                    // принимает, так что простой дольше окна — безвозвратная
+                    // дыра. Догрузить её нечем, показать размер можно.
+                    let now = Date().timeIntervalSince1970
+                    let previousSync = UserDefaults.standard.double(forKey: "lastSyncDate")
+                    let missed = now - previousSync - Self.graphWindow
+                    if previousSync > 0, missed > 30 * 60 {
+                        UserDefaults.standard.set(missed, forKey: "historyGap")
                     }
 
-                    UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastSyncDate")
+                    UserDefaults.standard.set(now, forKey: "lastSyncDate")
                     onSuccess()
                 }
             },

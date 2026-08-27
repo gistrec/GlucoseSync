@@ -59,17 +59,6 @@ final class LibreLinkUpAPI {
     // первый — и не сами записи в Health, которые эта отметка описывает.
     private let healthOwnerKey = "healthOwnerPatientId"
 
-    // Чьей истории принадлежит показанное предупреждение. Живёт отдельно от
-    // сессии: сброс токена по 401 или смена пароля пациента не меняют.
-    private let historyPatientKey = "historyPatientId"
-
-    /// Отметка истории у каждого пациента своя, иначе возврат к прежнему
-    /// начинался бы с чистого листа и его пропуски остались бы незамеченными.
-    var historyBaselineKey: String? {
-        guard let patientId = KeychainService.shared.get(patientIdKey) else { return nil }
-        return "lastReadingDate-\(patientId)"
-    }
-
     private var defaultHeaders: [String: String] {
         [
             "accept-encoding": "gzip",
@@ -467,25 +456,6 @@ final class LibreLinkUpAPI {
                     KeychainService.shared.set(patientId, for: self.healthOwnerKey)
                 }
                 let prefix = (owner == nil || owner == patientId) ? "" : "\(patientId)-"
-
-                let firstRun = UserDefaults.standard.string(forKey: self.historyPatientKey) == nil
-                let baselineKey = "lastReadingDate-\(patientId)"
-
-                // У обновившейся установки отметки нет — её до этой версии не
-                // писали. Без подстановки первый же запуск объявил бы всё
-                // пропущенное вычитанным и умолчал о нём навсегда.
-                if firstRun, UserDefaults.standard.object(forKey: baselineKey) == nil {
-                    let previousSync = UserDefaults.standard.double(forKey: "lastSyncDate")
-                    UserDefaults.standard.set(previousSync, forKey: baselineKey)
-                }
-
-                // Предупреждение показывается одно на экран, поэтому при смене
-                // пациента его снимаем. Отметки при этом у каждого свои и
-                // переживают переключение туда и обратно.
-                if !firstRun, UserDefaults.standard.string(forKey: self.historyPatientKey) != patientId {
-                    UserDefaults.standard.removeObject(forKey: "historyGap")
-                }
-                UserDefaults.standard.set(patientId, forKey: self.historyPatientKey)
 
                 let readings: [GlucoseReading] = entries.compactMap { dict -> GlucoseReading? in
                     guard let value = dict["ValueInMgPerDl"] as? Double,
