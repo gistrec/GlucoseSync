@@ -71,10 +71,13 @@ final class LibreLinkUpAPI {
         return hashed.compactMap { String(format: "%02x", $0) }.joined()
     }
 
+    /// Разбирает `FactoryTimestamp`. Сервер отдаёт его в UTC и без указания
+    /// смещения, поэтому зону задаём явно. Соседнее поле `Timestamp` — те же
+    /// сутки в зоне пациента, и этим парсером его разбирать нельзя.
     func parseLibreDate(_ string: String) -> Date? {
         let formatter = DateFormatter()
         formatter.dateFormat = "M/d/yyyy h:mm:ss a"
-        formatter.timeZone = .current
+        formatter.timeZone = TimeZone(identifier: "UTC")
         // Формат фиксированный, а не пользовательский, поэтому и локаль нужна
         // фиксированная. С локалью устройства символ AM/PM ожидается на языке
         // системы: на русском или сербском телефоне "8/22/2026 2:32:02 AM" не
@@ -425,13 +428,19 @@ final class LibreLinkUpAPI {
                     entries.append(current)
                 }
 
+                // Ключ дедупликации строим из момента времени, а не из строки:
+                // раскладка сервера может смениться, момент — нет.
                 let readings: [GlucoseReading] = entries.compactMap { dict -> GlucoseReading? in
                     guard let value = dict["ValueInMgPerDl"] as? Double,
-                          let timestampStr = dict["Timestamp"] as? String,
+                          let timestampStr = dict["FactoryTimestamp"] as? String,
                           let date = self.parseLibreDate(timestampStr) else {
                         return nil
                     }
-                    return GlucoseReading(id: timestampStr, value: value, timestamp: date)
+                    return GlucoseReading(
+                        id: String(Int(date.timeIntervalSince1970)),
+                        value: value,
+                        timestamp: date
+                    )
                 }
 
                 // Пустой ответ — норма: сервер молчит, пока не активен
