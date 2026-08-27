@@ -32,7 +32,17 @@ enum LibreLinkUpFailure: Error {
 
 final class LibreLinkUpAPI {
     static let shared = LibreLinkUpAPI()
-    private init() {}
+
+    private init() {
+        // Владельца записей в Health фиксируем при первом же обращении, до
+        // того как его успеет стереть смена учётных данных или отказ по 401.
+        // Потеряв его, приложение отдало бы «голые» идентификаторы следующему
+        // пациенту, а с возросшей версией сэмпла — и записи предыдущего.
+        if KeychainService.shared.get(healthOwnerKey) == nil,
+           let patientId = KeychainService.shared.get(patientIdKey) {
+            KeychainService.shared.set(patientId, for: healthOwnerKey)
+        }
+    }
 
     // Аккаунт живёт в конкретном регионе, и вход в чужой отвечает не токеном,
     // а редиректом на нужный. Регион запоминается, чтобы следующий запуск сразу
@@ -111,16 +121,6 @@ final class LibreLinkUpAPI {
     }
 
     private func clearSession() {
-        // Владельца записей в Health фиксируем до того, как потеряем его
-        // идентификатор. У обновившейся установки записи в Health уже есть,
-        // а отметки владельца ещё нет: смени пользователь учётные данные до
-        // первой синхронизации — и следующий пациент присвоил бы себе чужие
-        // ключи, а с возросшей версией сэмпла и сами чужие записи.
-        if KeychainService.shared.get(healthOwnerKey) == nil,
-           let patientId = KeychainService.shared.get(patientIdKey) {
-            KeychainService.shared.set(patientId, for: healthOwnerKey)
-        }
-
         KeychainService.shared.remove(tokenKey)
         KeychainService.shared.remove(accountIdKey)
         KeychainService.shared.remove(patientIdKey)
