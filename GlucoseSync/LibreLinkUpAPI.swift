@@ -87,19 +87,19 @@ final class LibreLinkUpAPI {
 
     // MARK: - Session
 
-    private var storedSession: (token: String, accountId: String, patientId: String)? {
+    /// Токен и аккаунт хранятся отдельно от `patientId`: они выдаются разными
+    /// запросами, и сбой второго не должен обесценивать результат первого.
+    private var storedAuth: (token: String, accountId: String)? {
         guard let token = KeychainService.shared.get(tokenKey),
-              let accountId = KeychainService.shared.get(accountIdKey),
-              let patientId = KeychainService.shared.get(patientIdKey) else {
+              let accountId = KeychainService.shared.get(accountIdKey) else {
             return nil
         }
-        return (token, accountId, patientId)
+        return (token, accountId)
     }
 
-    private func storeSession(token: String, accountId: String, patientId: String) {
+    private func storeAuth(token: String, accountId: String) {
         KeychainService.shared.set(token, for: tokenKey)
         KeychainService.shared.set(accountId, for: accountIdKey)
-        KeychainService.shared.set(patientId, for: patientIdKey)
     }
 
     private func clearSession() {
@@ -126,25 +126,24 @@ final class LibreLinkUpAPI {
         onSuccess: @escaping ([GlucoseReading]) -> Void,
         onError: @escaping (String) -> Void
     ) {
-        guard let session = storedSession else {
+        guard let auth = storedAuth else {
             loginAndFetch(email: email, password: password, onSuccess: onSuccess, onError: onError)
             return
         }
 
-        fetchGlucose(
-            token: session.token,
-            accountId: session.accountId,
-            patientId: session.patientId,
+        loadGlucose(
+            token: auth.token,
+            accountId: auth.accountId,
             onSuccess: onSuccess,
-            onError: { [weak self] failure in
+            onError: { failure in
                 guard case .unauthorized = failure else {
                     onError(failure.text)
                     return
                 }
                 // Сохранённый токен мёртв — единственный случай, когда
                 // повторный вход оправдан.
-                self?.clearSession()
-                self?.loginAndFetch(
+                self.clearSession()
+                self.loginAndFetch(
                     email: email, password: password, onSuccess: onSuccess, onError: onError
                 )
             }
@@ -160,27 +159,56 @@ final class LibreLinkUpAPI {
         login(
             email: email,
             password: password,
-            onSuccess: { [weak self] token, accountId in
-                // Идентификатор пациента спрашиваем у сервера, а не берём
-                // accountId: это разные сущности, и совпадают они только когда
-                // аккаунт следит за собственным сенсором.
-                self?.fetchPatientId(
+            onSuccess: { token, accountId in
+                // Сохраняем до похода за patientId: иначе любой сбой на том
+                // шаге стоит нового логина, а за их серию Abbott блокирует
+                // аккаунт на сутки.
+                self.storeAuth(token: token, accountId: accountId)
+                self.loadGlucose(
                     token: token,
                     accountId: accountId,
-                    onSuccess: { patientId in
-                        self?.storeSession(token: token, accountId: accountId, patientId: patientId)
-                        self?.fetchGlucose(
-                            token: token,
-                            accountId: accountId,
-                            patientId: patientId,
-                            onSuccess: onSuccess,
-                            onError: { onError($0.text) }
-                        )
-                    },
+                    onSuccess: onSuccess,
                     onError: { onError($0.text) }
                 )
             },
             onError: { onError($0.text) }
+        )
+    }
+
+    /// Замеры по готовой паре токен/аккаунт. `patientId` спрашиваем у сервера
+    /// только когда его ещё нет: это отдельная от `accountId` сущность, и
+    /// совпадают они лишь когда аккаунт следит за собственным сенсором.
+    private func loadGlucose(
+        token: String,
+        accountId: String,
+        onSuccess: @escaping ([GlucoseReading]) -> Void,
+        onError: @escaping (LibreLinkUpFailure) -> Void
+    ) {
+        if let patientId = KeychainService.shared.get(patientIdKey) {
+            fetchGlucose(
+                token: token,
+                accountId: accountId,
+                patientId: patientId,
+                onSuccess: onSuccess,
+                onError: onError
+            )
+            return
+        }
+
+        fetchPatientId(
+            token: token,
+            accountId: accountId,
+            onSuccess: { patientId in
+                KeychainService.shared.set(patientId, for: self.patientIdKey)
+                self.fetchGlucose(
+                    token: token,
+                    accountId: accountId,
+                    patientId: patientId,
+                    onSuccess: onSuccess,
+                    onError: onError
+                )
+            },
+            onError: onError
         )
     }
 
