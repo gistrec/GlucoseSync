@@ -27,6 +27,11 @@ final class SyncCoordinator {
             return
         }
 
+        // Отметка последнего записанного замера, а не последней синхронизации:
+        // при снятом сенсоре синхронизации проходят с пустым ответом, и вторая
+        // отметка занизила бы разрыв.
+        let lastReading = UserDefaults.standard.double(forKey: "lastReadingDate")
+
         // readings() сам решает, нужен ли вход: сохранённая сессия
         // переиспользуется, логин случается только после отказа сервера.
         LibreLinkUpAPI.shared.readings(
@@ -63,6 +68,18 @@ final class SyncCoordinator {
                     if saved == 0, !readings.isEmpty {
                         fail(lastError ?? "Could not write any readings to Apple Health. Check the app's Health permissions.")
                         return
+                    }
+
+                    // Окно /graph — около 12 часов, и параметров периода у
+                    // эндпоинта нет, как и у /logbook. Догрузить пропущенное
+                    // нечем, поэтому единственное, что здесь можно сделать
+                    // честно, — показать пользователю размер дыры.
+                    let stamps = readings.map(\.timestamp.timeIntervalSince1970)
+                    if let oldest = stamps.min(), let newest = stamps.max() {
+                        if lastReading > 0, oldest - lastReading > 30 * 60 {
+                            UserDefaults.standard.set(oldest - lastReading, forKey: "historyGap")
+                        }
+                        UserDefaults.standard.set(max(lastReading, newest), forKey: "lastReadingDate")
                     }
 
                     UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastSyncDate")
