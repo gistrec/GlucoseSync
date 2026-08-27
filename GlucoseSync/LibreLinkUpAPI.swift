@@ -57,6 +57,10 @@ final class LibreLinkUpAPI {
     // Чьи замеры уже лежат в Health под идентификаторами без префикса.
     private let healthOwnerKey = "healthOwnerPatientId"
 
+    // Чьей истории принадлежит отметка разрыва. Живёт отдельно от сессии:
+    // сброс токена по 401 или по смене пароля пациента не меняет.
+    private let historyPatientKey = "historyPatientId"
+
     private var defaultHeaders: [String: String] {
         [
             "accept-encoding": "gzip",
@@ -103,15 +107,6 @@ final class LibreLinkUpAPI {
     }
 
     private func storeSession(token: String, accountId: String, patientId: String) {
-        // Отметка истории принадлежит пациенту, а не учётным данным: сравнив
-        // её с замерами другого человека, приложение показало бы выдуманный
-        // разрыв либо перестало замечать настоящие. Смена же пароля у того же
-        // аккаунта отметку сохраняет.
-        if KeychainService.shared.get(patientIdKey) != patientId {
-            UserDefaults.standard.removeObject(forKey: "lastReadingDate")
-            UserDefaults.standard.removeObject(forKey: "historyGap")
-        }
-
         KeychainService.shared.set(token, for: tokenKey)
         KeychainService.shared.set(accountId, for: accountIdKey)
         KeychainService.shared.set(patientId, for: patientIdKey)
@@ -463,6 +458,15 @@ final class LibreLinkUpAPI {
                     UserDefaults.standard.set(patientId, forKey: self.healthOwnerKey)
                 }
                 let prefix = (owner == nil || owner == patientId) ? "" : "\(patientId)-"
+
+                // Отметка разрыва описывает историю конкретного пациента.
+                // Сравнив её с замерами другого, приложение показало бы
+                // выдуманный разрыв либо перестало замечать настоящие.
+                if UserDefaults.standard.string(forKey: self.historyPatientKey) != patientId {
+                    UserDefaults.standard.removeObject(forKey: "lastReadingDate")
+                    UserDefaults.standard.removeObject(forKey: "historyGap")
+                    UserDefaults.standard.set(patientId, forKey: self.historyPatientKey)
+                }
 
                 let readings: [GlucoseReading] = entries.compactMap { dict -> GlucoseReading? in
                     guard let value = dict["ValueInMgPerDl"] as? Double,
