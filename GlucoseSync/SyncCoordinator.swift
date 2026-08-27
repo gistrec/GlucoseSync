@@ -15,8 +15,15 @@ final class SyncCoordinator {
         onSuccess: @escaping () -> Void,
         onError: @escaping (String) -> Void
     ) {
+        // Сетевые ошибки приходят с очереди URLSession, а вызывающий мутирует
+        // по ним @State. Успешный путь уже нормализован через group.notify,
+        // так что доставку ошибок приводим к тому же контракту.
+        let fail: (String) -> Void = { message in
+            DispatchQueue.main.async { onError(message) }
+        }
+
         guard !email.isEmpty, !password.isEmpty else {
-            onError("Email and password are required")
+            fail("Email and password are required")
             return
         }
 
@@ -54,7 +61,7 @@ final class SyncCoordinator {
                     // Прежде такой случай рапортовал об успехе, и о том, что
                     // в Health пусто, узнать было неоткуда.
                     if saved == 0, !readings.isEmpty {
-                        onError(lastError ?? "Could not write any readings to Apple Health. Check the app's Health permissions.")
+                        fail(lastError ?? "Could not write any readings to Apple Health. Check the app's Health permissions.")
                         return
                     }
 
@@ -63,7 +70,7 @@ final class SyncCoordinator {
                 }
             },
             onError: { errorMessage in
-                onError(errorMessage)
+                fail(errorMessage)
             }
         )
     }
