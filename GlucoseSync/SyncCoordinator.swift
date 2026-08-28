@@ -101,11 +101,7 @@ final class SyncCoordinator {
             end: date,
             metadata: [
                 HKMetadataKeySyncIdentifier: externalId,
-                // Health заменяет запись с тем же идентификатором только при
-                // большей версии. Версия 1 писалась с датой, разобранной в
-                // зоне устройства; поднятая версия исправляет эти записи
-                // на месте, вместо того чтобы дублировать их.
-                HKMetadataKeySyncVersion: 2,
+                HKMetadataKeySyncVersion: 1,
                 HKMetadataKeyWasUserEntered: false,
                 HKMetadataKeyDeviceName: "Libre Cloud",
             ]
