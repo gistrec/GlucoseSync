@@ -54,11 +54,6 @@ final class LibreLinkUpAPI {
     private let accountIdKey = "libreAccountId"
     private let patientIdKey = "librePatientId"
 
-    // Чьи замеры уже лежат в Health под идентификаторами без префикса. В
-    // Keychain, а не в UserDefaults: переустановка стирает вторые, но не
-    // первый — и не сами записи в Health, которые эта отметка описывает.
-    private let healthOwnerKey = "healthOwnerPatientId"
-
     private var defaultHeaders: [String: String] {
         [
             "accept-encoding": "gzip",
@@ -111,16 +106,6 @@ final class LibreLinkUpAPI {
     }
 
     private func clearSession() {
-        // Владельца записей в Health фиксируем до того, как потеряем его
-        // идентификатор. У обновившейся установки записи в Health уже есть,
-        // а отметки владельца ещё нет: смени пользователь учётные данные до
-        // первой синхронизации — и следующий пациент присвоил бы себе чужие
-        // ключи, а с возросшей версией сэмпла и сами чужие записи.
-        if KeychainService.shared.get(healthOwnerKey) == nil,
-           let patientId = KeychainService.shared.get(patientIdKey) {
-            KeychainService.shared.set(patientId, for: healthOwnerKey)
-        }
-
         KeychainService.shared.remove(tokenKey)
         KeychainService.shared.remove(accountIdKey)
         KeychainService.shared.remove(patientIdKey)
@@ -443,20 +428,9 @@ final class LibreLinkUpAPI {
                     entries.append(current)
                 }
 
-                // Идентификатор остаётся прежним — строкой Timestamp: он уже
-                // разошёлся по Health у выпущенной версии, и смена схемы
-                // означала бы не исправление записей, а вторую их копию.
-                //
-                // Но принадлежат те записи одному конкретному пациенту. Замеры
-                // любого другого нельзя класть под теми же ключами: строки
-                // локального времени у разных людей совпадают, а с возросшей
-                // версией Health заменит ими чужие записи вместо своих.
-                let owner = KeychainService.shared.get(self.healthOwnerKey)
-                if owner == nil {
-                    KeychainService.shared.set(patientId, for: self.healthOwnerKey)
-                }
-                let prefix = (owner == nil || owner == patientId) ? "" : "\(patientId)-"
-
+                // Идентификатор остаётся строкой Timestamp: он уже разошёлся
+                // по Health у выпущенной версии, и смена схемы означала бы не
+                // исправление записей, а вторую их копию.
                 let readings: [GlucoseReading] = entries.compactMap { dict -> GlucoseReading? in
                     guard let value = dict["ValueInMgPerDl"] as? Double,
                           let localStr = dict["Timestamp"] as? String,
@@ -464,7 +438,7 @@ final class LibreLinkUpAPI {
                           let date = self.parseLibreDate(utcStr) else {
                         return nil
                     }
-                    return GlucoseReading(id: prefix + localStr, value: value, timestamp: date)
+                    return GlucoseReading(id: localStr, value: value, timestamp: date)
                 }
 
                 // Пустой ответ — норма: сервер молчит, пока не активен
