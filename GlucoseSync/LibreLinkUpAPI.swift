@@ -71,10 +71,13 @@ final class LibreLinkUpAPI {
         return hashed.compactMap { String(format: "%02x", $0) }.joined()
     }
 
+    /// Разбирает `FactoryTimestamp`. Сервер отдаёт его в UTC и без указания
+    /// смещения, поэтому зону задаём явно. Соседнее поле `Timestamp` — те же
+    /// сутки в зоне пациента, и этим парсером его разбирать нельзя.
     func parseLibreDate(_ string: String) -> Date? {
         let formatter = DateFormatter()
         formatter.dateFormat = "M/d/yyyy h:mm:ss a"
-        formatter.timeZone = .current
+        formatter.timeZone = TimeZone(identifier: "UTC")
         // Формат фиксированный, а не пользовательский, поэтому и локаль нужна
         // фиксированная. С локалью устройства символ AM/PM ожидается на языке
         // системы: на русском или сербском телефоне "8/22/2026 2:32:02 AM" не
@@ -425,13 +428,17 @@ final class LibreLinkUpAPI {
                     entries.append(current)
                 }
 
+                // Идентификатор остаётся строкой Timestamp: он уже разошёлся
+                // по Health у выпущенной версии, и смена схемы означала бы не
+                // исправление записей, а вторую их копию.
                 let readings: [GlucoseReading] = entries.compactMap { dict -> GlucoseReading? in
                     guard let value = dict["ValueInMgPerDl"] as? Double,
-                          let timestampStr = dict["Timestamp"] as? String,
-                          let date = self.parseLibreDate(timestampStr) else {
+                          let localStr = dict["Timestamp"] as? String,
+                          let utcStr = dict["FactoryTimestamp"] as? String,
+                          let date = self.parseLibreDate(utcStr) else {
                         return nil
                     }
-                    return GlucoseReading(id: timestampStr, value: value, timestamp: date)
+                    return GlucoseReading(id: localStr, value: value, timestamp: date)
                 }
 
                 // Пустой ответ — норма: сервер молчит, пока не активен

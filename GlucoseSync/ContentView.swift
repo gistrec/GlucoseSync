@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var password: String = ""
 
     @AppStorage("lastSyncDate") private var lastSyncDate: Double = 0  // Unix timestamp
+    @AppStorage("historyGap") private var historyGap: Double = 0  // Seconds never downloaded
 
     @State private var showAuthAlert = false
     @State private var showSyncAlert = false
@@ -16,6 +17,11 @@ struct ContentView: View {
     @State private var errorMessage = ""
 
     @State private var isSyncing = false
+
+    private func formattedGap(_ seconds: Double) -> String {
+        let hours = Int(seconds / 3600)
+        return hours >= 1 ? "\(hours) h" : "\(Int(seconds / 60)) min"
+    }
 
     private func formatted(_ date: Date) -> String {
         let formatter = DateFormatter()
@@ -45,6 +51,15 @@ struct ContentView: View {
                         Text("Last sync: \(formatted(date))")
                             .font(.subheadline)
                             .foregroundColor(.gray)
+                    }
+
+                    if historyGap > 0 {
+                        Text("\(formattedGap(historyGap)) of readings were missed — LibreView only serves the last 12 hours, so they cannot be recovered. Tap to dismiss.")
+                            .font(.subheadline)
+                            .foregroundColor(.orange)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                            .onTapGesture { historyGap = 0 }
                     }
 
                     HStack {
