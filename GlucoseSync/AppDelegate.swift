@@ -50,10 +50,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Всегда планируем следующую заранее
         scheduleGlucoseSync()
 
+        // Синхронизация не умеет отменяться, поэтому её результат может прийти
+        // уже после того, как система забрала у задачи время. Завершаем ровно
+        // один раз, кто бы ни пришёл первым.
+        let lock = NSLock()
+        var completed = false
+        let finish: (Bool) -> Void = { success in
+            lock.lock()
+            let first = !completed
+            completed = true
+            lock.unlock()
+
+            guard first else { return }
+            task.setTaskCompleted(success: success)
+        }
+
         // Таймаут от системы
         task.expirationHandler = {
             print("⏱️ BG task expired")
-            task.setTaskCompleted(success: false)
+            finish(false)
         }
 
         // Достаём креды (без UI)
@@ -62,7 +77,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         guard !email.isEmpty, !password.isEmpty else {
             print("❌ Missing credentials")
-            task.setTaskCompleted(success: false)
+            finish(false)
             return
         }
 
@@ -72,11 +87,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             password: password,
             onSuccess: {
                 print("✅ BG sync completed")
-                task.setTaskCompleted(success: true)
+                finish(true)
             },
             onError: { error in
                 print("❌ BG sync failed: \(error)")
-                task.setTaskCompleted(success: false)
+                finish(false)
             }
         )
     }
