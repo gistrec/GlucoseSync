@@ -54,6 +54,28 @@ final class LibreLinkUpAPI {
     private let accountIdKey = "libreAccountId"
     private let patientIdKey = "librePatientId"
 
+    // Дефолтные 60 секунд считались под интерактивный сценарий. Здесь же
+    // /llu/connections и /graph идут цепочкой из фоновой задачи, которой
+    // система даёт порядка полуминуты на всё про всё. Оба запроса дёшево
+    // повторить, поэтому сдаёмся рано.
+    private let urlSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 10
+        config.timeoutIntervalForResource = 20
+        return URLSession(configuration: config)
+    }()
+
+    // Логин — исключение. Оборванный запрос означает, что сервер токен выдал,
+    // а клиент его не получил и не сохранил; следующий цикл логинится заново,
+    // и за такую серию Abbott блокирует аккаунт на сутки. Ждать дорого, но
+    // логин случается редко, а его повтор стоит несоизмеримо дороже ожидания.
+    private let loginSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForResource = 90
+        return URLSession(configuration: config)
+    }()
+
     private var defaultHeaders: [String: String] {
         [
             "accept-encoding": "gzip",
@@ -232,7 +254,7 @@ final class LibreLinkUpAPI {
             "account-id": sha256(accountId)
         ]) { $1 }
 
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        urlSession.dataTask(with: request) { data, response, error in
             if let error = error {
                 onError(.message("Network request failed: \(error.localizedDescription)"))
                 return
@@ -309,7 +331,7 @@ final class LibreLinkUpAPI {
             return
         }
 
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        loginSession.dataTask(with: request) { data, response, error in
             if let error = error {
                 onError(.message("Network request failed: \(error.localizedDescription)"))
                 return
@@ -407,7 +429,7 @@ final class LibreLinkUpAPI {
             "account-id": sha256(accountId)  // передаём ХЭШ!
         ]) { $1 }
 
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        urlSession.dataTask(with: request) { data, response, error in
             if let error = error {
                 onError(.message("Network request failed: \(error.localizedDescription)"))
                 return
