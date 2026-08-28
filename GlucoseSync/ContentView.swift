@@ -4,6 +4,11 @@ import BackgroundTasks
 
 
 struct ContentView: View {
+    private enum Field {
+        case email
+        case password
+    }
+
     @State private var email: String = ""
     @State private var password: String = ""
 
@@ -16,6 +21,21 @@ struct ContentView: View {
     @State private var errorMessage = ""
 
     @State private var isSyncing = false
+
+    @FocusState private var focusedField: Field?
+
+    // Сохраняем только дописанное значение. Посимвольная запись клала в Keychain
+    // обрезанный пароль, которым фоновая задача потом логинилась при каждом
+    // пробуждении, а заодно стирала сессию на каждую нажатую клавишу.
+    private func persistCredentials() {
+        let emailChanged = KeychainService.shared.get("userEmail") != email
+        let passwordChanged = KeychainService.shared.get("userPassword") != password
+        guard emailChanged || passwordChanged else { return }
+
+        KeychainService.shared.set(email, for: "userEmail")
+        KeychainService.shared.set(password, for: "userPassword")
+        LibreLinkUpAPI.shared.forgetSession()
+    }
 
     private func formatted(_ date: Date) -> String {
         let formatter = DateFormatter()
@@ -57,21 +77,14 @@ struct ContentView: View {
                             .textContentType(.emailAddress)
                             .autocapitalization(.none)
                             .keyboardType(.emailAddress)
+                            .focused($focusedField, equals: .email)
+                            .submitLabel(.next)
+                            .onSubmit { focusedField = .password }
                     }
                     .padding()
                     .background(Color(UIColor.secondarySystemBackground))
                     .cornerRadius(8)
                     .disabled(isSyncing)
-                    // Сбрасываем сессию только когда значение действительно
-                    // сменилось. onAppear подставляет сюда сохранённый email,
-                    // и это тоже срабатывание onChange — без проверки сессия
-                    // стиралась при каждом запуске приложения, то есть кеш
-                    // токена не работал вовсе.
-                    .onChange(of: email) {
-                        guard KeychainService.shared.get("userEmail") != email else { return }
-                        KeychainService.shared.set(email, for: "userEmail")
-                        LibreLinkUpAPI.shared.forgetSession()
-                    }
 
                     HStack {
                         Image(systemName: "lock")
@@ -81,16 +94,14 @@ struct ContentView: View {
                             .foregroundColor(.gray)
                         SecureField("Password", text: $password)
                             .textContentType(.password)
+                            .focused($focusedField, equals: .password)
+                            .submitLabel(.done)
+                            .onSubmit { focusedField = nil }
                     }
                     .padding()
                     .background(Color(UIColor.secondarySystemBackground))
                     .cornerRadius(8)
                     .disabled(isSyncing)
-                    .onChange(of: password) {
-                        guard KeychainService.shared.get("userPassword") != password else { return }
-                        KeychainService.shared.set(password, for: "userPassword")
-                        LibreLinkUpAPI.shared.forgetSession()
-                    }
 
                     Button("Request HealthKit Access") {
                         HealthKitViewModel.shared.requestAuthorization(
@@ -108,6 +119,8 @@ struct ContentView: View {
                     .disabled(isSyncing)
 
                     Button("Sync Glucose from Server") {
+                        focusedField = nil
+                        persistCredentials()
                         isSyncing = true
                         SyncCoordinator.shared.syncGlucoseFromServer(
                             email: email,
@@ -128,6 +141,10 @@ struct ContentView: View {
                     .disabled(isSyncing)
                 }
                 .padding()
+                .onChange(of: focusedField) { previous, _ in
+                    guard previous != nil else { return }
+                    persistCredentials()
+                }
 
                 Spacer()
 
