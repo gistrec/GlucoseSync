@@ -83,7 +83,7 @@ final class LibreLinkUpAPI {
             "connection": "Keep-Alive",
             "content-type": "application/json",
             "product": "llu.ios",
-            "version": "4.12.0"
+            "version": "4.17.0"
         ]
     }
 
