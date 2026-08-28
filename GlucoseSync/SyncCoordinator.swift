@@ -6,7 +6,11 @@ final class SyncCoordinator {
     static let shared = SyncCoordinator()
 
     private let healthStore = HKHealthStore()
-    
+
+    // Измеренное окно /graph — 11.7-11.9 часа. Округляем вверх: занижённый
+    // разрыв лучше выдуманного.
+    private static let graphWindow: TimeInterval = 12 * 3600
+
     private init() {}
 
     func syncGlucoseFromServer(
@@ -65,7 +69,20 @@ final class SyncCoordinator {
                         return
                     }
 
-                    UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastSyncDate")
+                    // Сервер отдаёт фиксированное окно и параметров периода не
+                    // принимает, так что простой дольше окна — безвозвратная
+                    // дыра. Догрузить её нечем, показать размер можно.
+                    //
+                    // Пустой ответ под это не подпадает: у неактивного сенсора
+                    // замеров не было вовсе, и терять было нечего.
+                    let now = Date().timeIntervalSince1970
+                    let previousSync = UserDefaults.standard.double(forKey: "lastSyncDate")
+                    let missed = now - previousSync - Self.graphWindow
+                    if previousSync > 0, !readings.isEmpty, missed > 30 * 60 {
+                        UserDefaults.standard.set(missed, forKey: "historyGap")
+                    }
+
+                    UserDefaults.standard.set(now, forKey: "lastSyncDate")
                     onSuccess()
                 }
             },
