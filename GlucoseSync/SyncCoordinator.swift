@@ -72,10 +72,13 @@ final class SyncCoordinator {
                     // Сервер отдаёт фиксированное окно и параметров периода не
                     // принимает, так что простой дольше окна — безвозвратная
                     // дыра. Догрузить её нечем, показать размер можно.
+                    //
+                    // Пустой ответ под это не подпадает: у неактивного сенсора
+                    // замеров не было вовсе, и терять было нечего.
                     let now = Date().timeIntervalSince1970
                     let previousSync = UserDefaults.standard.double(forKey: "lastSyncDate")
                     let missed = now - previousSync - Self.graphWindow
-                    if previousSync > 0, missed > 30 * 60 {
+                    if previousSync > 0, !readings.isEmpty, missed > 30 * 60 {
                         UserDefaults.standard.set(missed, forKey: "historyGap")
                     }
 
